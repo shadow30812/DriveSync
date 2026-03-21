@@ -1,6 +1,6 @@
 import os
 
-from blacklist import IGNORED_NAMES
+from blacklist import should_ignore
 from state_manager import StateManager
 
 
@@ -21,7 +21,7 @@ class LocalScanner:
             try:
                 with os.scandir(current_dir) as entries:
                     for entry in entries:
-                        if entry.name in IGNORED_NAMES:
+                        if should_ignore(entry.name):
                             print(
                                 f"Skipping ignored folder types: {entry.path}. \n\
                                 Written to skipped_files.log"
