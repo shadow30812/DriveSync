@@ -27,13 +27,13 @@ def extract_drive_id(link):
 
 def main():
     root_drive_id = extract_drive_id(DRIVE_LINK)
+    root_stat = os.stat(LOCAL_DIRECTORY)
 
     print("1. Initializing Systems...")
     db = StateManager()
     drive = DriveAPI()
     scanner = LocalScanner(LOCAL_DIRECTORY, db)
 
-    root_stat = os.stat(LOCAL_DIRECTORY)
     db.upsert_record(
         inode=str(root_stat.st_ino),
         path=LOCAL_DIRECTORY,
@@ -45,6 +45,17 @@ def main():
 
     print("2. Scanning local files...")
     changes = scanner.scan()
+
+    # --- Process Deletions ---
+    if changes.get("deleted"):
+        print(f"-> Processing {len(changes['deleted'])} deleted items...")
+        for item in changes["deleted"]:
+            name = os.path.basename(item["path"])
+            print(f"   -> Moving to Trash: {name}")
+
+            drive.trash_item(item["drive_id"])
+            db.delete_record(item["inode"])
+            logging.info(f"TRASHED | ID: {item['drive_id']} | Path: {item['path']}")
 
     # --- Process Renames and Moves ---
     if changes["renamed_or_moved"]:

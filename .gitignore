@@ -1,5 +1,5 @@
 *.log
 .vscode
 __pycache__
-*.db
+*.db*
 *.json

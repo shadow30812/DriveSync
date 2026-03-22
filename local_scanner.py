@@ -13,8 +13,10 @@ class LocalScanner:
         print(f"Starting high-speed scan of {self.root_dir}...")
 
         root_stat = os.stat(self.root_dir)
+        root_inode = str(root_stat.st_ino)
         stack = [(self.root_dir, str(root_stat.st_ino))]
-        changes = {"new": [], "modified": [], "renamed_or_moved": []}
+        changes = {"new": [], "modified": [], "renamed_or_moved": [], "deleted": []}
+        seen_inodes = {root_inode}
 
         while stack:
             current_dir, parent_inode = stack.pop()
@@ -47,8 +49,10 @@ class LocalScanner:
                             stat = entry.stat(follow_symlinks=False)
                             inode = str(stat.st_ino)
                             mtime = stat.st_mtime
+
                             is_folder = entry.is_dir(follow_symlinks=False)
                             path = entry.path
+                            seen_inodes.add(inode)
 
                             if is_folder:
                                 stack.append((path, inode))
@@ -93,6 +97,12 @@ class LocalScanner:
             except (PermissionError, OSError) as e:
                 print(f"Skipping inaccessible folder {current_dir}: {e}")
 
+        all_db_records = self.db.get_all_inodes()
+        for record in all_db_records:
+            if record["inode"] not in seen_inodes:
+                changes["deleted"].append(record)
+
+        changes["deleted"].sort(key=lambda x: x["path"].count(os.sep), reverse=True)
         return changes
 
 

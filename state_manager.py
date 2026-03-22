@@ -11,6 +11,8 @@ class StateManager:
     def _setup_table(self):
         """Creates the database schema if it doesn't exist."""
         with self.conn:
+            self.conn.execute("PRAGMA journal_mode=WAL;")
+            self.conn.execute("PRAGMA synchronous=NORMAL;")
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS files (
                     inode TEXT PRIMARY KEY,
@@ -22,6 +24,17 @@ class StateManager:
                 )
             """)
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_path ON files(path)")
+
+    def get_all_inodes(self):
+        """Fetches all tracked inodes to detect deletions."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT inode, path, drive_id, is_folder FROM files")
+        return [dict(row) for row in cursor.fetchall()]
+
+    def delete_record(self, inode):
+        """Removes a file record from the database."""
+        with self.conn:
+            self.conn.execute("DELETE FROM files WHERE inode = ?", (str(inode),))
 
     def get_record(self, inode):
         """Fetches a single file's state by its OS inode."""

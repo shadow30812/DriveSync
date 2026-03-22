@@ -43,11 +43,13 @@ class DriveAPI:
         return folder.get("id")
 
     def upload_new_file(self, file_path, parent_id):
-        """Uploads a new file using resumable uploads."""
+        """Uploads a new file, skipping resumable requests for small files."""
         name = os.path.basename(file_path)
         metadata = {"name": name, "parents": [parent_id]}
-        media = MediaFileUpload(file_path, resumable=True)
+        file_size = os.path.getsize(file_path)
+        use_resumable = file_size > (5 * 1024 * 1024)
 
+        media = MediaFileUpload(file_path, resumable=use_resumable)
         file = (
             self.service.files()
             .create(body=metadata, media_body=media, fields="id")
@@ -56,8 +58,12 @@ class DriveAPI:
         return file.get("id")
 
     def update_modified_file(self, file_path, drive_id):
-        """Overwrites the content of an existing Drive file."""
-        media = MediaFileUpload(file_path, resumable=True)
+        """Overwrites the content of an existing Drive file,
+        skipping resumable requests for small files."""
+        file_size = os.path.getsize(file_path)
+        use_resumable = file_size > (5 * 1024 * 1024)
+
+        media = MediaFileUpload(file_path, resumable=use_resumable)
         self.service.files().update(fileId=drive_id, media_body=media).execute()
         return drive_id
 
@@ -132,3 +138,12 @@ class DriveAPI:
             f"Cloud state downloaded! Mapped {sum(len(v) for v in remote_map.values())} remote items."
         )
         return remote_map
+
+    def trash_item(self, drive_id):
+        """Moves a Drive item to the trash."""
+        try:
+            self.service.files().update(
+                fileId=drive_id, body={"trashed": True}
+            ).execute()
+        except Exception as e:
+            print(e)
