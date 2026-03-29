@@ -1,10 +1,11 @@
+import io
 import os
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
@@ -147,3 +148,19 @@ class DriveAPI:
             ).execute()
         except Exception as e:
             print(e)
+
+    def get_file_metadata(self, file_id):
+        """Fetches metadata for a specific file, specifically its size."""
+        return (
+            self.service.files().get(fileId=file_id, fields="id, name, size").execute()
+        )
+
+    def download_file(self, file_id, destination_path):
+        """Downloads a file from Drive to the local filesystem using chunked streams."""
+        request = self.service.files().get_media(fileId=file_id)
+
+        with io.FileIO(destination_path, "wb") as fh:
+            downloader = MediaIoBaseDownload(fh, request, chunksize=5 * 1024 * 1024)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
