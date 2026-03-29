@@ -27,6 +27,7 @@ The system detects and processes only the changes since the last run:
 * New files and folders
 * Modified files (based on last modified time)
 * Renamed or moved items (detected via inode consistency)
+* Local deletions (mirrors local removals by moving the corresponding Drive items to the Trash)
 
 This significantly reduces execution time and API usage compared to full re-sync approaches.
 
@@ -214,6 +215,8 @@ python main.py
 python cleanup.py
 ```
 
+### 
+
 ---
 
 ## Synchronization Workflow
@@ -232,7 +235,7 @@ python cleanup.py
 
 ## Limitations
 
-* No deletion sync (files removed locally are not deleted from Drive)
+* Strictly one-way synchronization (changes or deletions made directly on Google Drive are not synced back to the local machine)
 * Symbolic links are skipped
 * Requires broad Drive API permissions
 * Initial scans on large directories may be time-consuming
@@ -251,7 +254,6 @@ python cleanup.py
 * Two-way synchronization
 * Conflict detection and resolution
 * Parallelized uploads
-* Deletion synchronization
 * User interface (CLI enhancements or GUI)
 
 ---
