@@ -1,5 +1,6 @@
 import io
 import os
+import time
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -14,15 +15,43 @@ class DriveAPI:
     def __init__(self):
         self.service = self._authenticate()
 
+    def _clear_expired_token(self, token_path="token.json"):
+        """Deletes the token if it's older than 7 days to prevent invalid_grant errors."""
+        if not os.path.exists(token_path):
+            return
+
+        seven_days_sec = 7 * 24 * 60 * 60
+        token_age = time.time() - os.path.getmtime(token_path)
+
+        if token_age > seven_days_sec:
+            print(
+                f"\n[INFO] OAuth token is older than 7 days ({(token_age / 86400):.1f} days). Deleting to force re-authentication..."
+            )
+            try:
+                os.remove(token_path)
+            except OSError as e:
+                print(f"[ERROR] Failed to delete expired token: {e}")
+
     def _authenticate(self):
         """Authenticates the user and returns the Drive API service."""
+        self._clear_expired_token()
         creds = None
         if os.path.exists("token.json"):
             creds = Credentials.from_authorized_user_file("token.json", SCOPES)
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+                try:
+                    creds.refresh(Request())
+                except Exception as e:
+                    print(
+                        f"\n[INFO] Token refresh failed ({e}). Forcing re-authentication..."
+                    )
+                    os.remove("token.json")
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        "credentials.json", SCOPES
+                    )
+                    creds = flow.run_local_server(port=0)
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
                     "credentials.json", SCOPES
