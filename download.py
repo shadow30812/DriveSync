@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import sys
@@ -8,6 +9,13 @@ TARGET_FILE_ID = None
 TARGET_FOLDER_ID = "1UQ6wQeFpzeQ9NuzMNvQ4NXCgEqKKbjwg"
 
 DESTINATION_PATH = r"/media/shadow30812/Windows-SSD/Well/DriveSync_Downloads"
+
+logging.basicConfig(
+    filename="download_audit.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 def get_folder_contents(drive_api, folder_id, current_rel_path=""):
@@ -45,6 +53,7 @@ def get_folder_contents(drive_api, folder_id, current_rel_path=""):
                     print(
                         f"   -> Skipping {item['name']} (Workspace document, no direct binary)"
                     )
+                    logging.warning(f"SKIPPED | Workspace document: {item['name']}")
 
         page_token = results.get("nextPageToken")
         if not page_token:
@@ -60,13 +69,9 @@ def check_disk_space(target_dir, total_required_bytes):
     safe_required_bytes = total_required_bytes * 1.1
 
     if usage.free < safe_required_bytes:
-        print(
-            f"\n[CRITICAL ERROR] Insufficient disk space in partition containing: {target_dir}"
-        )
-        print(
-            f"Additional space required: {total_required_bytes / (1024 * 1024):.2f} MB"
-        )
-        print(f"Available free space: {usage.free / (1024 * 1024):.2f} MB")
+        err_msg = f"Insufficient disk space. Required: {total_required_bytes / (1024 * 1024):.2f} MB, Free: {usage.free / (1024 * 1024):.2f} MB"
+        print(f"\n[CRITICAL ERROR] {err_msg}")
+        logging.error(f"TERMINATED | {err_msg}")
         sys.exit(1)
 
     print(
@@ -75,6 +80,8 @@ def check_disk_space(target_dir, total_required_bytes):
 
 
 def main():
+    logging.info("--- Download Session Started ---")
+
     if (TARGET_FILE_ID is None) == (TARGET_FOLDER_ID is None):
         print("[CRITICAL ERROR] Invalid Configuration.")
         print("You must provide EITHER a TARGET_FILE_ID OR a TARGET_FOLDER_ID.")
@@ -83,8 +90,7 @@ def main():
 
     print("Initializing Drive API for Download...")
     drive = DriveAPI()
-
-    files_to_download = []  
+    files_to_download = []
     total_download_size = 0
 
     print("Resolving target files and calculating storage delta...")
@@ -109,6 +115,7 @@ def main():
             else:
                 print("[ERROR] Target is a Google Workspace document or has no size.")
                 sys.exit(1)
+
         except Exception as e:
             print(f"[ERROR] Failed to fetch file metadata: {e}")
             sys.exit(1)
@@ -145,10 +152,13 @@ def main():
 
         try:
             drive.download_file(file_id, dest_path)
+            logging.info(f"DOWNLOADED | ID: {file_id} | Path: {dest_path}")
         except Exception as e:
             print(f"   [ERROR] Failed to download {file_id}: {e}")
+            logging.error(f"FAILED DOWNLOAD | ID: {file_id} | Error: {e}")
 
     print("\nDownload Operations Complete.")
+    logging.info("--- Download Session Completed ---")
 
 
 if __name__ == "__main__":
