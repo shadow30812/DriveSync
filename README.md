@@ -14,6 +14,7 @@ This project provides:
 * Reliable change detection using inode-based tracking
 * Efficient API usage to reduce unnecessary uploads and updates
 * A cleanup utility to remove common development artifacts from Google Drive
+* A high-speed, chunked download utility for targeted file or folder retrieval
 * Persistent state management using SQLite
 
 ---
@@ -139,6 +140,19 @@ All operations are logged for audit purposes.
 
 ---
 
+### High-Speed Targeted Downloading
+
+A dedicated utility (`download.py`) for pulling specific files or mirroring entire remote directories to your local machine.
+
+Features include:
+
+* **Pre-Execution Safety:** Automatically maps the remote file sizes and cross-references them against your local partition's available free space, aborting if the disk is too full.
+* **Chunked Streaming:** Bypasses memory limitations by streaming binary data in 5MB chunks.
+* **Smart Delta Checks:** If a file already exists locally, it only calculates the difference in required space.
+* **Live Progress Tracking:** Utilizes `tqdm` for real-time, byte-level progress bars across uploads, downloads, and cleanups.
+
+---
+
 ### Logging and Audit Trail
 
 The system maintains detailed logs:
@@ -160,6 +174,7 @@ This enables traceability and debugging.
 ├── local_scanner.py     # Filesystem scanning and change detection
 ├── state_manager.py     # SQLite-based state tracking
 ├── cleanup.py           # Drive cleanup utility
+├── download.py          # Targeted high-speed download utility
 ├── blacklist.py         # Ignored file/folder definitions
 ├── sync_state.db        # State database (auto-created)
 ├── credentials.json     # Google API credentials (user-provided)
@@ -215,7 +230,17 @@ python main.py
 python cleanup.py
 ```
 
-### 
+### Run Download Utility
+
+1. Edit `download.py` and provide exactly **one** of the following in the configuration block:
+   * `TARGET_FILE_ID` (for a single file)
+   * `TARGET_FOLDER_ID` (to recursively map and download a folder)
+2. Define your `DESTINATION_PATH`.
+3. Run the script:
+
+```bash
+python download.py
+```
 
 ---
 
