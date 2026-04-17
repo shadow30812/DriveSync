@@ -27,17 +27,14 @@ def get_folder_contents(drive_api, folder_id, current_rel_path=""):
     page_token = None
 
     while True:
-        results = (
-            drive_api.service.files()
-            .list(
-                q=query,
-                spaces="drive",
-                fields="nextPageToken, files(id, name, mimeType, size)",
-                pageSize=1000,
-                pageToken=page_token,
-            )
-            .execute()
+        request = drive_api.service.files().list(
+            q=query,
+            spaces="drive",
+            fields="nextPageToken, files(id, name, mimeType, size)",
+            pageSize=1000,
+            pageToken=page_token,
         )
+        results = drive_api.safe_execute(request)
 
         for item in results.get("files", []):
             item_path = os.path.join(current_rel_path, item["name"])
@@ -96,11 +93,12 @@ def main():
     print("Resolving target files and calculating storage delta...")
     if TARGET_FILE_ID:
         try:
-            metadata = (
-                drive.service.files()
-                .get(fileId=TARGET_FILE_ID, fields="id, name, size")
-                .execute()
+            request = drive.service.files().get(
+                fileId=TARGET_FILE_ID, fields="id, name, size"
             )
+            metadata = drive.safe_execute(request)
+            assert metadata
+
             if "size" in metadata:
                 size = int(metadata["size"])
                 files_to_download.append((TARGET_FILE_ID, DESTINATION_PATH, size))

@@ -7,12 +7,42 @@ IGNORED_NAMES = {
     "env",
     ".idea",
     ".vscode",
+    ".vs",
+    "packages",
+    "bin",
+    "obj",
+    "Debug",
+    "Release",
     ".DS_Store",
+    "$RECYCLE.BIN",
+    "System Volume Information",
+    "Recovery",
+    "pagefile.sys",
+    "hiberfil.sys",
+    "swapfile.sys",
+    "ntuser.dat",
     "Thumbs.db",
+    "ehthumbs.db",
     "desktop.ini",
 }
 
-IGNORED_EXTENSIONS = {".o", ".pyc", ".class", ".tmp", ".bak", ".swp"}
+IGNORED_EXTENSIONS = {
+    ".o",
+    ".pyc",
+    ".class",
+    ".tmp",
+    ".bak",
+    ".swp",
+    ".obj",
+    ".exe",
+    ".dll",
+    ".pdb",
+    ".suo",
+    ".user",
+    ".lnk",
+    ".dmp",
+    ".log",
+}
 
 IGNORED_PREFIXES = {
     ".",

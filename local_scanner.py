@@ -58,6 +58,12 @@ class LocalScanner:
                                 stack.append((path, inode))
 
                             db_record = self.db.get_record(inode)
+                            if db_record and bool(db_record["is_folder"]) != bool(
+                                is_folder
+                            ):
+                                changes["deleted"].append(db_record)
+                                db_record = None
+
                             if not db_record:
                                 changes["new"].append(
                                     {

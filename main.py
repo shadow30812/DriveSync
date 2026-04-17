@@ -58,6 +58,8 @@ def main():
             logging.info(f"TRASHED | ID: {item['drive_id']} | Path: {item['path']}")
 
     # --- Process Renames and Moves ---
+    deferred_moves = []
+
     if changes["renamed_or_moved"]:
         print(
             f"3. Processing {len(changes['renamed_or_moved'])} moved/renamed items..."
@@ -66,7 +68,8 @@ def main():
             new_name = os.path.basename(item["new_path"])
             parent_record = db.get_record(item["new_parent_inode"])
             if not parent_record:
-                print(f"Error: Could not find parent for {new_name}. Skipping.")
+                print(f"   -> Deferring {new_name}: Parent folder not synced yet.")
+                deferred_moves.append(item)
                 continue
 
             print(f"   -> Moving/Renaming to: {new_name}")
@@ -129,6 +132,31 @@ def main():
                 item["mtime"],
                 item["is_folder"],
                 item["parent_inode"],
+            )
+
+    # --- Process Deferred Moves ---
+    if deferred_moves:
+        print(f"-> Processing {len(deferred_moves)} deferred moves...")
+        for item in deferred_moves:
+            new_name = os.path.basename(item["new_path"])
+            parent_record = db.get_record(item["new_parent_inode"])
+            if not parent_record:
+                print(f"   -> Error: Parent for {new_name} still not found. Skipping.")
+                continue
+
+            print(f"   -> Moving/Renaming to: {new_name}")
+            drive.rename_or_move(item["drive_id"], new_name, parent_record["drive_id"])
+            logging.info(
+                f"MOVED/RENAMED (DEFERRED) | ID: {item['drive_id']} | Path: {item['new_path']}"
+            )
+            stat = os.stat(item["new_path"])
+            db.upsert_record(
+                item["inode"],
+                item["new_path"],
+                item["drive_id"],
+                stat.st_mtime,
+                item["is_folder"],
+                item["new_parent_inode"],
             )
 
     # --- Process Modified Items ---

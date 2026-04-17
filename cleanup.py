@@ -17,7 +17,9 @@ def trash_item(drive, item_id, item_name):
     """Helper function to execute the trash command and log it."""
     print(f"Moving to Trash: {item_name} (ID: {item_id})")
     try:
-        drive.service.files().update(fileId=item_id, body={"trashed": True}).execute()
+        drive.safe_execute(
+            drive.service.files().update(fileId=item_id, body={"trashed": True})
+        )
         logging.info(f"TRASHED | ID: {item_id} | Name: {item_name}")
         return True
     except Exception as e:
@@ -32,17 +34,14 @@ def targeted_scan(drive, folder_id):
     trashed_count = 0
 
     while True:
-        results = (
-            drive.service.files()
-            .list(
-                q=query,
-                spaces="drive",
-                fields="nextPageToken, files(id, name, mimeType)",
-                pageSize=1000,
-                pageToken=page_token,
-            )
-            .execute()
+        request = drive.service.files().list(
+            q=query,
+            spaces="drive",
+            fields="nextPageToken, files(id, name, mimeType)",
+            pageSize=1000,
+            pageToken=page_token,
         )
+        results = drive.safe_execute(request)
 
         items = results.get("files", [])
 
@@ -69,17 +68,14 @@ def global_scan(drive):
     trashed_count = 0
 
     while True:
-        results = (
-            drive.service.files()
-            .list(
-                q=query,
-                spaces="drive",
-                fields="nextPageToken, files(id, name)",
-                pageSize=1000,
-                pageToken=page_token,
-            )
-            .execute()
+        request = drive.service.files().list(
+            q=query,
+            spaces="drive",
+            fields="nextPageToken, files(id, name)",
+            pageSize=1000,
+            pageToken=page_token,
         )
+        results = drive.safe_execute(request)
 
         items = results.get("files", [])
 

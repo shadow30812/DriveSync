@@ -1,7 +1,9 @@
 import io
 import os
+import socket
 import time
 
+import httplib2
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -62,6 +64,24 @@ class DriveAPI:
 
         return build("drive", "v3", credentials=creds)
 
+    def safe_execute(self, request, max_attempts=5):
+        """Executes an API request and catches severe network drops (DNS/Socket failures)."""
+        for attempt in range(max_attempts):
+            try:
+                return request.execute(num_retries=5)
+            except (httplib2.error.ServerNotFoundError, socket.gaierror, OSError) as e:
+                if attempt < max_attempts - 1:
+                    wait_time = 2**attempt
+                    print(
+                        f"\n   -> [NETWORK WARNING] Connection lost ({e}). Retrying in {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                else:
+                    print(
+                        f"\n   -> [CRITICAL ERROR] Network unavailable after {max_attempts} attempts."
+                    )
+                    raise
+
     def create_folder(self, name, parent_id):
         """Creates a folder on Drive and returns its ID."""
         metadata = {
@@ -69,7 +89,10 @@ class DriveAPI:
             "mimeType": "application/vnd.google-apps.folder",
             "parents": [parent_id],
         }
-        folder = self.service.files().create(body=metadata, fields="id").execute()
+
+        request = self.service.files().create(body=metadata, fields="id")
+        folder = self.safe_execute(request)
+        assert folder
         return folder.get("id")
 
     def upload_new_file(self, file_path, parent_id):
@@ -80,11 +103,11 @@ class DriveAPI:
         use_resumable = file_size > (5 * 1024 * 1024)
 
         media = MediaFileUpload(file_path, resumable=use_resumable)
-        file = (
-            self.service.files()
-            .create(body=metadata, media_body=media, fields="id")
-            .execute()
+        request = self.service.files().create(
+            body=metadata, media_body=media, fields="id"
         )
+        file = self.safe_execute(request)
+        assert file
         return file.get("id")
 
     def update_modified_file(self, file_path, drive_id):
@@ -92,24 +115,27 @@ class DriveAPI:
         skipping resumable requests for small files."""
         file_size = os.path.getsize(file_path)
         use_resumable = file_size > (5 * 1024 * 1024)
-
         media = MediaFileUpload(file_path, resumable=use_resumable)
-        self.service.files().update(fileId=drive_id, media_body=media).execute()
+
+        request = self.service.files().update(fileId=drive_id, media_body=media)
+        self.safe_execute(request)
         return drive_id
 
     def rename_or_move(self, drive_id, new_name, new_parent_id):
         """Updates the name and/or parent folder of a Drive item."""
-        file = self.service.files().get(fileId=drive_id, fields="parents").execute()
+        request_get = self.service.files().get(fileId=drive_id, fields="parents")
+        file = self.safe_execute(request_get)
         previous_parents = ",".join(file.get("parents", []))
-
         metadata = {"name": new_name}
-        self.service.files().update(
+
+        request_update = self.service.files().update(
             fileId=drive_id,
             body=metadata,
             addParents=new_parent_id,
             removeParents=previous_parents,
             fields="id, parents",
-        ).execute()
+        )
+        self.safe_execute(request_update)
 
     def find_item_by_name(self, name, parent_id, is_folder=False):
         """Checks if a file/folder already exists in a specific Drive folder."""
@@ -121,11 +147,10 @@ class DriveAPI:
         )
 
         query = f"name='{safe_name}' and '{parent_id}' in parents and {mime_query} and trashed=false"
-        results = (
-            self.service.files()
-            .list(q=query, spaces="drive", fields="files(id, name)")
-            .execute()
+        request = self.service.files().list(
+            q=query, spaces="drive", fields="files(id, name)"
         )
+        results = self.safe_execute(request)
 
         items = results.get("files", [])
         return items[0].get("id") if items else None
@@ -137,17 +162,14 @@ class DriveAPI:
 
         page_token = None
         while True:
-            results = (
-                self.service.files()
-                .list(
-                    q="trashed=false",
-                    spaces="drive",
-                    fields="nextPageToken, files(id, name, parents)",
-                    pageSize=1000,
-                    pageToken=page_token,
-                )
-                .execute()
+            request = self.service.files().list(
+                q="trashed=false",
+                spaces="drive",
+                fields="nextPageToken, files(id, name, parents)",
+                pageSize=1000,
+                pageToken=page_token,
             )
+            results = self.safe_execute(request)
 
             for item in results.get("files", []):
                 file_id = item.get("id")
@@ -172,17 +194,17 @@ class DriveAPI:
     def trash_item(self, drive_id):
         """Moves a Drive item to the trash."""
         try:
-            self.service.files().update(
+            request = self.service.files().update(
                 fileId=drive_id, body={"trashed": True}
-            ).execute()
+            )
+            self.safe_execute(request)
         except Exception as e:
             print(e)
 
     def get_file_metadata(self, file_id):
         """Fetches metadata for a specific file, specifically its size."""
-        return (
-            self.service.files().get(fileId=file_id, fields="id, name, size").execute()
-        )
+        request = self.service.files().get(fileId=file_id, fields="id, name, size")
+        return self.safe_execute(request)
 
     def download_file(self, file_id, destination_path):
         """Downloads a file from Drive to the local filesystem using chunked streams."""
@@ -192,4 +214,20 @@ class DriveAPI:
             downloader = MediaIoBaseDownload(fh, request, chunksize=5 * 1024 * 1024)
             done = False
             while done is False:
-                status, done = downloader.next_chunk()
+                for attempt in range(5):
+                    try:
+                        status, done = downloader.next_chunk(num_retries=5)
+                        break
+                    except (
+                        httplib2.error.ServerNotFoundError,
+                        socket.gaierror,
+                        OSError,
+                    ) as e:
+                        if attempt < 4:
+                            wait_time = 2**attempt
+                            print(
+                                f"\n   -> [NETWORK WARNING] Stream interrupted ({e}). Retrying chunk in {wait_time}s..."
+                            )
+                            time.sleep(wait_time)
+                        else:
+                            raise
