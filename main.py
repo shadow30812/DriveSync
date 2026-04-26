@@ -183,7 +183,20 @@ def main():
                 item["parent_inode"],
             )
 
-    print("\nSync Complete!")
+    print("\nFast Sync Complete!")
+
+    try:
+        user_input = input(
+            "\nWould you like to run a deep redundancy check for missing/corrupted files? (This compares MD5 checksums and is significantly slower) [y/N]: "
+        )
+        if user_input.lower() != "n":
+            from redundancy_check import verify_uploads
+
+            verify_uploads(drive, db, LOCAL_DIRECTORY, root_drive_id)
+
+    except KeyboardInterrupt:
+        pass
+
     db.close()
 
 

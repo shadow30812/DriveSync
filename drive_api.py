@@ -157,7 +157,7 @@ class DriveAPI:
 
     def get_full_remote_map(self):
         """Downloads the metadata of the entire Google Drive tree into RAM."""
-        print("Downloading cloud state map... (This might take a minute)")
+        print("Downloading cloud state map... (This might take a few minutes)")
         remote_map = {}
 
         page_token = None

@@ -155,8 +155,19 @@ def main():
             print(f"   [ERROR] Failed to download {file_id}: {e}")
             logging.error(f"FAILED DOWNLOAD | ID: {file_id} | Error: {e}")
 
-    print("\nDownload Operations Complete.")
-    logging.info("--- Download Session Completed ---")
+    print("\nFast Download Operations Complete.")
+    logging.info("--- Fast Download Session Completed ---")
+
+    try:
+        user_input = input(
+            "\nWould you like to run a deep redundancy check for missing/corrupted downloads? [y/N]: "
+        )
+        if user_input.lower() != "n":
+            from redundancy_check import verify_downloads
+
+            verify_downloads(drive, TARGET_FOLDER_ID, TARGET_FILE_ID, DESTINATION_PATH)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

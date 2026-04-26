@@ -28,6 +28,7 @@ IGNORED_NAMES = {
 
 IGNORED_EXTENSIONS = {
     ".o",
+    ".d",
     ".pyc",
     ".class",
     ".tmp",
