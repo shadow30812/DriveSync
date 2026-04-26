@@ -6,7 +6,7 @@ import sys
 from drive_api import DriveAPI
 
 TARGET_FILE_ID = None
-TARGET_FOLDER_ID = "1UQ6wQeFpzeQ9NuzMNvQ4NXCgEqKKbjwg"
+TARGET_FOLDER_ID = "1G4l6FJDcXHg-8LhTwXpRooEp0QtbQVDl"
 
 DESTINATION_PATH = r"/media/shadow30812/Windows-SSD/Well/DriveSync_Downloads"
 
@@ -89,6 +89,7 @@ def main():
     drive = DriveAPI()
     files_to_download = []
     total_download_size = 0
+    seen_paths = set()
 
     print("Resolving target files and calculating storage delta...")
     if TARGET_FILE_ID:
@@ -101,15 +102,19 @@ def main():
 
             if "size" in metadata:
                 size = int(metadata["size"])
-                files_to_download.append((TARGET_FILE_ID, DESTINATION_PATH, size))
-
                 local_size = (
                     os.path.getsize(DESTINATION_PATH)
                     if os.path.exists(DESTINATION_PATH)
                     else 0
                 )
-                if size > local_size:
-                    total_download_size += size - local_size
+
+                if local_size != size:
+                    print(
+                        f"   -> [QUEUING] Target File (Local: {local_size}B | Cloud: {size}B)"
+                    )
+                    files_to_download.append((TARGET_FILE_ID, DESTINATION_PATH, size))
+                    if size > local_size:
+                        total_download_size += size - local_size
             else:
                 print("[ERROR] Target is a Google Workspace document or has no size.")
                 sys.exit(1)
@@ -120,43 +125,56 @@ def main():
 
     elif TARGET_FOLDER_ID:
         resolved_items = get_folder_contents(drive, TARGET_FOLDER_ID)
+
         for file_id, rel_path, size in resolved_items:
-            abs_path = os.path.join(DESTINATION_PATH, rel_path)
+            if rel_path in seen_paths:
+                print(
+                    f"   -> [WARNING] Duplicate cloud item detected and ignored: '{rel_path}'"
+                )
+                continue
+            seen_paths.add(rel_path)
+            abs_path = os.path.normpath(os.path.join(DESTINATION_PATH, rel_path))
 
             if os.path.exists(abs_path):
                 local_size = os.path.getsize(abs_path)
-                if size > local_size:
-                    total_download_size += size - local_size
+
+                if local_size != size:
+                    print(
+                        f"   -> [QUEUING MODIFIED/INCOMPLETE] {rel_path} (Local: {local_size}B | Cloud: {size}B)"
+                    )
+                    if size > local_size:
+                        total_download_size += size - local_size
+                    files_to_download.append((file_id, abs_path, size))
             else:
                 total_download_size += size
-
-            files_to_download.append((file_id, abs_path, size))
+                files_to_download.append((file_id, abs_path, size))
 
     if not files_to_download:
-        print("No valid files found to download.")
-        return
+        print(
+            "\nAll target files already exist locally with matching file sizes. Skipping download phase."
+        )
+    else:
+        base_check_dir = (
+            os.path.dirname(DESTINATION_PATH) if TARGET_FILE_ID else DESTINATION_PATH
+        )
+        check_disk_space(base_check_dir, total_download_size)
 
-    base_check_dir = (
-        os.path.dirname(DESTINATION_PATH) if TARGET_FILE_ID else DESTINATION_PATH
-    )
-    check_disk_space(base_check_dir, total_download_size)
+        print(f"\nStarting high-speed download of {len(files_to_download)} file(s)...")
+        for file_id, dest_path, size in files_to_download:
+            filename = os.path.basename(dest_path)
+            print(f"-> Downloading '{filename}' ({(size / (1024 * 1024)):.2f} MB)...")
 
-    print(f"Starting high-speed download of {len(files_to_download)} file(s)...")
-    for file_id, dest_path, size in files_to_download:
-        filename = os.path.basename(dest_path)
-        print(f"-> Downloading '{filename}' ({(size / (1024 * 1024)):.2f} MB)...")
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
 
-        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            try:
+                drive.download_file(file_id, dest_path)
+                logging.info(f"DOWNLOADED | ID: {file_id} | Path: {dest_path}")
+            except Exception as e:
+                print(f"   [ERROR] Failed to download {file_id}: {e}")
+                logging.error(f"FAILED DOWNLOAD | ID: {file_id} | Error: {e}")
 
-        try:
-            drive.download_file(file_id, dest_path)
-            logging.info(f"DOWNLOADED | ID: {file_id} | Path: {dest_path}")
-        except Exception as e:
-            print(f"   [ERROR] Failed to download {file_id}: {e}")
-            logging.error(f"FAILED DOWNLOAD | ID: {file_id} | Error: {e}")
-
-    print("\nFast Download Operations Complete.")
-    logging.info("--- Fast Download Session Completed ---")
+        print("\nFast Download Operations Complete.")
+        logging.info("--- Fast Download Session Completed ---")
 
     try:
         user_input = input(

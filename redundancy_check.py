@@ -18,7 +18,7 @@ def compute_md5(file_path):
 
 
 def build_remote_tree(drive_api, root_id, local_base_path):
-    """Fetches Drive files and maps them to their expected local paths."""
+    """Fetches Drive files and maps them strictly to their expected local paths."""
     print("   -> Fetching cloud state and checksums...")
     files = []
     page_token = None
@@ -42,14 +42,20 @@ def build_remote_tree(drive_api, root_id, local_base_path):
     def resolve_path(file_item):
         path_parts = [file_item["name"]]
         current = file_item
+        found_target_root = False
+
         while current.get("parents"):
             parent_id = current["parents"][0]
             if parent_id == root_id:
+                found_target_root = True
                 break
             if parent_id not in id_to_file:
                 return None
             current = id_to_file[parent_id]
             path_parts.insert(0, current["name"])
+
+        if not found_target_root:
+            return None
 
         return os.path.join(local_base_path, *path_parts)
 
@@ -125,7 +131,6 @@ def verify_uploads(drive_api, db, local_directory, root_drive_id):
                         logging.warning(f"SKIPPED REPAIR | {error_msg}")
                         continue
 
-                # Update DB so local_scanner skips this file on the next fast sync
                 db.upsert_record(
                     inode, local_path, drive_id, stat.st_mtime, False, parent_inode
                 )
