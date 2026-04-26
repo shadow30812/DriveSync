@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 
 from blacklist import should_ignore
@@ -64,6 +65,8 @@ def build_remote_tree(drive_api, root_id, local_base_path):
 def verify_uploads(drive_api, db, local_directory, root_drive_id):
     """Verifies Drive has 100% accurate copies of local files."""
     print("\n--- Deep Redundancy Check: Verifying Uploads ---")
+    logging.info("--- Deep Redundancy Check Started (Uploads) ---")
+
     remote_map = build_remote_tree(drive_api, root_drive_id, local_directory)
     local_files = []
 
@@ -101,6 +104,9 @@ def verify_uploads(drive_api, db, local_directory, root_drive_id):
                 if drive_id:
                     print(f"   -> Fixing content for {os.path.basename(local_path)}...")
                     drive_api.update_modified_file(local_path, drive_id)
+                    logging.info(
+                        f"UPDATED CONTENT (DEEP REPAIR) | ID: {drive_id} | Path: {local_path}"
+                    )
                 else:
                     print(
                         f"   -> Uploading missing file {os.path.basename(local_path)}..."
@@ -110,10 +116,13 @@ def verify_uploads(drive_api, db, local_directory, root_drive_id):
                         drive_id = drive_api.upload_new_file(
                             local_path, parent_record["drive_id"]
                         )
-                    else:
-                        print(
-                            f"   -> [ERROR] Cannot upload {local_path}. Fast-sync must establish the folder structure first."
+                        logging.info(
+                            f"UPLOADED FILE (DEEP REPAIR) | ID: {drive_id} | Path: {local_path}"
                         )
+                    else:
+                        error_msg = f"Cannot upload {local_path}. Fast-sync must establish the folder structure first."
+                        print(f"   -> [ERROR] {error_msg}")
+                        logging.warning(f"SKIPPED REPAIR | {error_msg}")
                         continue
 
                 # Update DB so local_scanner skips this file on the next fast sync
@@ -122,13 +131,16 @@ def verify_uploads(drive_api, db, local_directory, root_drive_id):
                 )
             except Exception as e:
                 print(f"   -> Failed to sync {local_path}: {e}")
+                logging.error(f"FAILED REPAIR UPLOAD | Path: {local_path} | Error: {e}")
 
     print("Upload verification complete.")
+    logging.info("--- Deep Redundancy Check Completed (Uploads) ---")
 
 
 def verify_downloads(drive_api, target_folder_id, target_file_id, destination_path):
     """Verifies local machine has 100% accurate copies of Drive files."""
     print("\n--- Deep Redundancy Check: Verifying Downloads ---")
+    logging.info("--- Deep Redundancy Check Started (Downloads) ---")
 
     if target_folder_id:
         remote_map = build_remote_tree(drive_api, target_folder_id, destination_path)
@@ -154,7 +166,16 @@ def verify_downloads(drive_api, target_folder_id, target_file_id, destination_pa
                     f"   -> Securing full download for {os.path.basename(expected_local_path)}..."
                 )
                 os.makedirs(os.path.dirname(expected_local_path), exist_ok=True)
-                drive_api.download_file(remote_file["id"], expected_local_path)
+                try:
+                    drive_api.download_file(remote_file["id"], expected_local_path)
+                    logging.info(
+                        f"DOWNLOADED (DEEP REPAIR) | ID: {remote_file['id']} | Path: {expected_local_path}"
+                    )
+                except Exception as e:
+                    print(f"   -> Failed to download {expected_local_path}: {e}")
+                    logging.error(
+                        f"FAILED REPAIR DOWNLOAD | ID: {remote_file['id']} | Error: {e}"
+                    )
 
     elif target_file_id:
         request = drive_api.service.files().get(
@@ -168,6 +189,16 @@ def verify_downloads(drive_api, target_folder_id, target_file_id, destination_pa
             print(
                 f"[FIXING DOWNLOAD] Pulling accurate copy of {remote_file['name']}..."
             )
-            drive_api.download_file(remote_file["id"], destination_path)
+            try:
+                drive_api.download_file(remote_file["id"], destination_path)
+                logging.info(
+                    f"DOWNLOADED (DEEP REPAIR) | ID: {remote_file['id']} | Path: {destination_path}"
+                )
+            except Exception as e:
+                print(f"   -> Failed to download {destination_path}: {e}")
+                logging.error(
+                    f"FAILED REPAIR DOWNLOAD | ID: {remote_file['id']} | Error: {e}"
+                )
 
     print("Download verification complete.")
+    logging.info("--- Deep Redundancy Check Completed (Downloads) ---")

@@ -73,6 +73,23 @@ This approach provides both accuracy and efficiency.
 
 ---
 
+### Deep Redundancy & Integrity Checking (Dual-Layer Architecture)
+
+While the inode-based scanner is extremely fast, dynamically generated inodes (especially when mounting Windows NTFS/exFAT partitions on Linux) can sometimes collide or change, causing files to be silently skipped.  
+
+To guarantee absolute data integrity, the system employs a dual-layer approach:
+
+1. **The Fast Pass:** Uses OS-level inodes and modification times for rapid daily syncing.
+2. **The Deep Check:** An optional, rigorous verification layer that bypasses OS metadata entirely.
+
+**How the Deep Check works:**
+
+* **Cryptographic Verification:** Computes local MD5 hashes and compares them directly against Google Drive's native `md5Checksum` metadata.
+* **Phase 1 (Upload Verification):** Treats your local drive as the absolute master. Identifies skipped, missing, or corrupted files on Drive and forces an upload/update, then automatically injects the corrected metadata back into the SQLite database so the fast scanner recognizes it.
+* **Phase 2 (Download Verification):** Treats Google Drive as the absolute master. Scans your local download directory for any missing chunks or corrupted files and automatically pulls accurate copies from the cloud.
+
+---
+
 ### Persistent State Management
 
 State is stored in a local SQLite database (`sync_state.db`).
@@ -167,7 +184,7 @@ This enables traceability and debugging.
 
 ## Project Structure
 
-```markdown
+```txt
 .
 ├── main.py              # Entry point for synchronization
 ├── drive_api.py         # Google Drive API wrapper
@@ -175,6 +192,7 @@ This enables traceability and debugging.
 ├── state_manager.py     # SQLite-based state tracking
 ├── cleanup.py           # Drive cleanup utility
 ├── download.py          # Targeted high-speed download utility
+├── redundancy_check.py  # MD5-based deep verification utility
 ├── blacklist.py         # Ignored file/folder definitions
 ├── sync_state.db        # State database (auto-created)
 ├── credentials.json     # Google API credentials (user-provided)
@@ -224,6 +242,8 @@ DRIVE_LINK = "https://drive.google.com/drive/folders/YOUR_FOLDER_ID"
 python main.py
 ```
 
+_Note: Upon completion of the fast sync, the CLI will prompt you to optionally run the Deep Redundancy Check to verify all uploads using MD5 checksums. Logs for repairs are tagged with (DEEP REPAIR) in sync_audit.log._
+
 ### Run Cleanup Utility
 
 ```bash
@@ -241,6 +261,8 @@ python cleanup.py
 ```bash
 python download.py
 ```
+
+_Note: Upon completion of the fast download stream, the CLI will prompt you to optionally run the Deep Redundancy Check to ensure no files were corrupted or dropped due to network instability._
 
 ---
 
@@ -260,10 +282,12 @@ python download.py
 
 ## Limitations
 
-* Strictly one-way synchronization (changes or deletions made directly on Google Drive are not synced back to the local machine)
+* Strictly one-way synchronization (changes or deletions made directly on Google Drive are not synced back to the local machine in case of uploads)
 * Symbolic links are skipped
 * Requires broad Drive API permissions
 * Initial scans on large directories may be time-consuming
+
+**Deep Check Overhead:** The MD5 redundancy check provides 100% mathematical certainty but is significantly slower than the fast pass, as it requires hashing every local file and fetching full cloud metadata trees.
 
 ---
 
@@ -285,7 +309,9 @@ python download.py
 
 ## License
 
-Specify your preferred license (e.g., MIT License)
+MIT License 2026
+
+Check [LICENSE](LICENSE) for more details.
 
 ---
 
