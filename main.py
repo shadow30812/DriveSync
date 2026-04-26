@@ -187,7 +187,7 @@ def main():
 
     try:
         user_input = input(
-            "\nWould you like to run a deep redundancy check for missing/corrupted files? (This compares MD5 checksums and is significantly slower) [y/N]: "
+            "\nWould you like to run a deep redundancy check for missing/corrupted files? (This compares MD5 checksums and is significantly slower) [Y/n]: "
         )
         if user_input.lower() != "n":
             from redundancy_check import verify_uploads

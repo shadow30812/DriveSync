@@ -160,7 +160,7 @@ def main():
 
     try:
         user_input = input(
-            "\nWould you like to run a deep redundancy check for missing/corrupted downloads? [y/N]: "
+            "\nWould you like to run a deep redundancy check for missing/corrupted downloads? [Y/n]: "
         )
         if user_input.lower() != "n":
             from redundancy_check import verify_downloads
