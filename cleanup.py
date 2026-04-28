@@ -1,12 +1,16 @@
 import logging
+from logging.handlers import RotatingFileHandler
 
 from blacklist import should_ignore
 from drive_api import DriveAPI
 
 TARGET_FOLDER_ID = "1UQ6wQeFpzeQ9NuzMNvQ4NXCgEqKKbjwg"
 
+log_handler = RotatingFileHandler(
+    "cleanup_audit.log", maxBytes=10 * 1024 * 1024, backupCount=2
+)
 logging.basicConfig(
-    filename="cleanup_audit.log",
+    handlers=[log_handler],
     level=logging.INFO,
     format="%(asctime)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",

@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import sys
+from logging.handlers import RotatingFileHandler
 
 from drive_api import DriveAPI
 
@@ -10,8 +11,11 @@ TARGET_FOLDER_ID = "1G4l6FJDcXHg-8LhTwXpRooEp0QtbQVDl"
 
 DESTINATION_PATH = r"/media/shadow30812/Windows-SSD/Well/DriveSync_Downloads"
 
+log_handler = RotatingFileHandler(
+    "download_audit.log", maxBytes=10 * 1024 * 1024, backupCount=2
+)
 logging.basicConfig(
-    filename="download_audit.log",
+    handlers=[log_handler],
     level=logging.INFO,
     format="%(asctime)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",

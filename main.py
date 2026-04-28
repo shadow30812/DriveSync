@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from logging.handlers import RotatingFileHandler
 
 from drive_api import DriveAPI
 from local_scanner import LocalScanner
@@ -11,8 +12,12 @@ LOCAL_DIRECTORY = r"/media/shadow30812/Windows-SSD/Well"
 DRIVE_LINK = (
     "https://drive.google.com/drive/u/0/folders/1UQ6wQeFpzeQ9NuzMNvQ4NXCgEqKKbjwg"
 )
+
+log_handler = RotatingFileHandler(
+    "sync_audit.log", maxBytes=10 * 1024 * 1024, backupCount=2
+)
 logging.basicConfig(
-    filename="sync_audit.log",
+    handlers=[log_handler],
     level=logging.INFO,
     format="%(asctime)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
