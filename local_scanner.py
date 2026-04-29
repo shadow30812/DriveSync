@@ -1,7 +1,18 @@
+import logging
 import os
+from logging.handlers import RotatingFileHandler
 
 from blacklist import should_ignore
 from state_manager import StateManager
+
+skip_logger = logging.getLogger("skipped_files")
+skip_logger.setLevel(logging.INFO)
+skip_handler = RotatingFileHandler(
+    "skipped_files.log", maxBytes=10 * 1024 * 1024, backupCount=1
+)
+skip_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+skip_logger.addHandler(skip_handler)
+skip_logger.propagate = False
 
 
 class LocalScanner:
@@ -24,26 +35,12 @@ class LocalScanner:
                 with os.scandir(current_dir) as entries:
                     for entry in entries:
                         if should_ignore(entry.name):
-                            print(
-                                f"Skipping ignored folder types: {entry.path}. \n\
-                                Written to skipped_files.log"
-                            )
-                            with open(
-                                "skipped_files.log", "a", encoding="utf-8"
-                            ) as log_file:
-                                log_file.write(f"IGNORED: {entry.path}\n")
+                            skip_logger.info(f"IGNORED: {entry.path}")
                             continue
 
                         try:
                             if entry.is_symlink():
-                                print(
-                                    f"Skipping symlink (unsupported by Drive): {entry.path}. \n\
-                                    Written to skipped_files.log"
-                                )
-                                with open(
-                                    "skipped_files.log", "a", encoding="utf-8"
-                                ) as log_file:
-                                    log_file.write(f"SKIPPED SYMLINK: {entry.path}\n")
+                                skip_logger.info(f"SKIPPED SYMLINK: {entry.path}")
                                 continue
 
                             stat = entry.stat(follow_symlinks=False)
