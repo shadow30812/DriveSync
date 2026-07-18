@@ -9,9 +9,7 @@ from state_manager import StateManager
 
 # --- Configuration ---
 LOCAL_DIRECTORY = r"/media/shadow30812/Windows-SSD/Well"
-DRIVE_LINK = (
-    "https://drive.google.com/drive/u/0/folders/1UQ6wQeFpzeQ9NuzMNvQ4NXCgEqKKbjwg"
-)
+DRIVE_LINK = "https://drive.google.com/drive/folders/1EBhun3WyFgftQk2aoXGnphEWh39MdQrb"
 
 log_handler = RotatingFileHandler(
     "sync_audit.log", maxBytes=10 * 1024 * 1024, backupCount=2
