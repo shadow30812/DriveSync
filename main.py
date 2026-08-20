@@ -8,7 +8,7 @@ from local_scanner import LocalScanner
 from state_manager import StateManager
 
 # --- Configuration ---
-LOCAL_DIRECTORY = r"/media/shadow30812/Windows-SSD/Well"
+LOCAL_DIRECTORY = r"/mnt/Windows/Well"
 DRIVE_LINK = "https://drive.google.com/drive/folders/1EBhun3WyFgftQk2aoXGnphEWh39MdQrb"
 
 log_handler = RotatingFileHandler(
