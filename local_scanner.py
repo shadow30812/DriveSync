@@ -2,7 +2,8 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from blacklist import should_ignore
+from blacklist import should_ignore_dir, should_ignore_file
+from console import console
 from state_manager import StateManager
 
 skip_logger = logging.getLogger("skipped_files")
@@ -28,13 +29,24 @@ class LocalScanner:
         stack = [(self.root_dir, str(root_stat.st_ino))]
         changes = {"new": [], "modified": [], "renamed_or_moved": [], "deleted": []}
         seen_inodes = {root_inode}
+        unreadable = set()
 
         while stack:
             current_dir, parent_inode = stack.pop()
             try:
                 with os.scandir(current_dir) as entries:
                     for entry in entries:
-                        if should_ignore(entry.name):
+                        console.advance()
+                        try:
+                            entry_is_dir = entry.is_dir(follow_symlinks=False)
+                        except OSError:
+                            entry_is_dir = False
+                        ignored = (
+                            should_ignore_dir(entry.path)
+                            if entry_is_dir
+                            else should_ignore_file(entry.path)
+                        )
+                        if ignored:
                             skip_logger.info(f"IGNORED: {entry.path}")
                             continue
 
@@ -81,6 +93,8 @@ class LocalScanner:
                                             "drive_id": db_record["drive_id"],
                                             "new_parent_inode": parent_inode,
                                             "is_folder": is_folder,
+                                            "content_changed": not is_folder
+                                            and db_record["mtime"] < mtime,
                                         }
                                     )
                                 elif not is_folder and db_record["mtime"] < mtime:
@@ -95,18 +109,55 @@ class LocalScanner:
                                     )
                         except OSError as e:
                             print(f"Skipping unreadable file {entry.path}: {e}")
+                            unreadable.add(entry.path)
                             continue
 
             except (PermissionError, OSError) as e:
                 print(f"Skipping inaccessible folder {current_dir}: {e}")
+                unreadable.add(current_dir)
 
         all_db_records = self.db.get_all_inodes()
         for record in all_db_records:
-            if record["inode"] not in seen_inodes:
+            if record["inode"] not in seen_inodes and not _is_under_any(
+                record["path"], unreadable
+            ):
                 changes["deleted"].append(record)
+
+        self._pair_replaced_files(changes)
 
         changes["deleted"].sort(key=lambda x: x["path"].count(os.sep), reverse=True)
         return changes
+
+    @staticmethod
+    def _pair_replaced_files(changes):
+        """A file saved via write-to-temp-and-rename keeps its path but gets a
+        new inode, so it shows up as deleted + new. Turn each such pair into a
+        content update of the existing Drive file instead of trash + upload."""
+        new_files = {
+            item["path"]: item for item in changes["new"] if not item["is_folder"]
+        }
+        still_deleted = []
+        for record in changes["deleted"]:
+            item = None if record["is_folder"] else new_files.pop(record["path"], None)
+            if item is None:
+                still_deleted.append(record)
+                continue
+            changes["new"].remove(item)
+            changes["modified"].append(
+                {
+                    "path": item["path"],
+                    "inode": item["inode"],
+                    "drive_id": record["drive_id"],
+                    "mtime": item["mtime"],
+                    "parent_inode": item["parent_inode"],
+                    "old_inode": record["inode"],
+                }
+            )
+        changes["deleted"] = still_deleted
+
+
+def _is_under_any(path, roots):
+    return any(path == root or path.startswith(root + os.sep) for root in roots)
 
 
 if __name__ == "__main__":

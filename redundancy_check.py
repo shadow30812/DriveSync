@@ -2,7 +2,8 @@ import hashlib
 import logging
 import os
 
-from blacklist import should_ignore
+from blacklist import should_ignore_dir, should_ignore_file
+from console import console
 
 
 def compute_md5(file_path):
@@ -77,12 +78,14 @@ def verify_uploads(drive_api, db, local_directory, root_drive_id):
     local_files = []
 
     for root, dirs, files in os.walk(local_directory):
-        dirs[:] = [d for d in dirs if not should_ignore(d)]
+        dirs[:] = [d for d in dirs if not should_ignore_dir(os.path.join(root, d))]
         for file in files:
-            if not should_ignore(file):
+            if not should_ignore_file(os.path.join(root, file)):
                 local_files.append(os.path.join(root, file))
 
+    console.phase("Verifying uploads", len(local_files))
     for local_path in local_files:
+        console.advance()
         remote_file = remote_map.get(local_path)
         needs_upload = False
         drive_id = None
@@ -108,13 +111,15 @@ def verify_uploads(drive_api, db, local_directory, root_drive_id):
         if needs_upload:
             try:
                 if drive_id:
-                    print(f"   -> Fixing content for {os.path.basename(local_path)}...")
+                    console.action(
+                        f"   -> Fixing content for {os.path.basename(local_path)}..."
+                    )
                     drive_api.update_modified_file(local_path, drive_id)
                     logging.info(
                         f"UPDATED CONTENT (DEEP REPAIR) | ID: {drive_id} | Path: {local_path}"
                     )
                 else:
-                    print(
+                    console.action(
                         f"   -> Uploading missing file {os.path.basename(local_path)}..."
                     )
                     parent_record = db.get_record(parent_inode)
@@ -138,6 +143,7 @@ def verify_uploads(drive_api, db, local_directory, root_drive_id):
                 print(f"   -> Failed to sync {local_path}: {e}")
                 logging.error(f"FAILED REPAIR UPLOAD | Path: {local_path} | Error: {e}")
 
+    console.finish()
     print("Upload verification complete.")
     logging.info("--- Deep Redundancy Check Completed (Uploads) ---")
 

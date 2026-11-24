@@ -8,6 +8,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
@@ -112,19 +113,31 @@ class DriveAPI:
 
     def update_modified_file(self, file_path, drive_id):
         """Overwrites the content of an existing Drive file,
-        skipping resumable requests for small files."""
+        skipping resumable requests for small files.
+        Returns None if the file no longer exists on Drive."""
         file_size = os.path.getsize(file_path)
         use_resumable = file_size > (5 * 1024 * 1024)
         media = MediaFileUpload(file_path, resumable=use_resumable)
 
         request = self.service.files().update(fileId=drive_id, media_body=media)
-        self.safe_execute(request)
+        try:
+            self.safe_execute(request)
+        except HttpError as e:
+            if e.resp.status == 404:
+                return None
+            raise
         return drive_id
 
     def rename_or_move(self, drive_id, new_name, new_parent_id):
-        """Updates the name and/or parent folder of a Drive item."""
+        """Updates the name and/or parent folder of a Drive item.
+        Returns False if the item no longer exists on Drive."""
         request_get = self.service.files().get(fileId=drive_id, fields="parents")
-        file = self.safe_execute(request_get)
+        try:
+            file = self.safe_execute(request_get)
+        except HttpError as e:
+            if e.resp.status == 404:
+                return False
+            raise
         previous_parents = ",".join(file.get("parents", []))
         metadata = {"name": new_name}
 
@@ -136,6 +149,7 @@ class DriveAPI:
             fields="id, parents",
         )
         self.safe_execute(request_update)
+        return True
 
     def find_item_by_name(self, name, parent_id, is_folder=False):
         """Checks if a file/folder already exists in a specific Drive folder."""
